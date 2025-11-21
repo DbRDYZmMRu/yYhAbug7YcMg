@@ -16,12 +16,12 @@ export default {
     const url = new URL(request.url);
     const ua = request.headers.get("user-agent") || "";
     const isBot = /Googlebot|Google-InspectionTool|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|facebookexternalhit|Twitterbot|LinkedInBot/i.test(ua);
-
+    
     const match = url.pathname.match(/^\/poetry\/(.+)$/);
     
     // Only proceed if it's a bot AND the path matches /poetry/...
     if (!match || !isBot) return fetch(request);
-
+    
     // Dynamic mapping of collection names to environment bindings
     const COLLECTIONS = {
       "frith-hilton": env.FRITH_HILTON_JSON,
@@ -32,10 +32,10 @@ export default {
     const pathParts = match[1].split("/");
     const bookSlug = pathParts[0].toLowerCase();
     const poemSlug = pathParts[1] ? pathParts[1].toLowerCase() : null;
-
+    
     let book = null;
     let collectionKey = "";
-
+    
     // Iterate through collections to find the matching book
     for (const [key, jsonUrl] of Object.entries(COLLECTIONS)) {
       if (!jsonUrl) continue; // Skip if the binding is missing
@@ -59,9 +59,9 @@ export default {
         console.error(`Error fetching/parsing JSON for ${key}:`, e);
       }
     }
-
+    
     if (!book) return fetch(request);
-
+    
     // Generate clean slug for the canonical URL
     const bookCleanSlug = book.bookTitle
       .toLowerCase()
@@ -69,34 +69,38 @@ export default {
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
     const bookUrl = `https://www.frithhilton.com.ng/poetry/${bookCleanSlug}`;
-
+    
     if (!poemSlug) {
       // Serve Book Index Page
       return new Response(generateBookPage(book, bookUrl, collectionKey), {
         headers: { "Content-Type": "text/html; charset=utf-8" }
       });
     }
-
+    
     // Handle Poem Page
     const poemCleanTitle = poemSlug.replace(/-/g, " ");
-    const poem = book.poems.find(p => 
+    const poem = book.poems.find(p =>
       // Look for a case-insensitive match (allowing for minor differences)
-      p.title.toLowerCase().replace(/’/g, "'").includes(poemCleanTitle)
+      p.title.toLowerCase().normalize("NFD").replace(/[\u2018\u2019]/g, "").includes(poemCleanTitle)
     );
     
     if (!poem) return fetch(request);
-
+    
     const poemCleanSlug = poem.title
       .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-      
+      .normalize("NFD") // Handles ’ → ' (Unicode normalization)
+      .replace(/[\u2018\u2019]/g, "") // Remove apostrophes completely (’ and ')
+      .replace(/[^a-z0-9\s-]/g, "") // Remove all other special chars
+      .trim()
+      .replace(/\s+/g, "-") // Spaces → single dash
+      .replace(/-+/g, "-") // Multiple dashes → one
+      .replace(/^-|-$/g, ""); // Trim dashes from ends  
+    
     // CORRECTED: Use correct template literal syntax for poemUrl
-    const poemUrl = `${bookUrl}/${poemCleanSlug}`; 
+    const poemUrl = `${bookUrl}/${poemCleanSlug}`;
     
     const poemText = book.content[0][poem.number] || "<p>Full poem available in the book.</p>";
-
+    
     return new Response(generatePoemPage(book, poem, poemText, bookUrl, poemUrl, collectionKey), {
       headers: { "Content-Type": "text/html; charset=utf-8" }
     });
@@ -107,18 +111,18 @@ export default {
 
 function generateBookPage(book, canonical, collectionKey) {
   const samplePoems = book.poems.slice(0, 3).map(p => p.title).join(", ") + (book.poems.length > 3 ? "…" : "");
-
+  
   // CORRECTED: Template literals
   const description = `${book.bookTitle} by Frith Hilton, featuring poems like ${samplePoems}, with dedication to ${book.dedicatee}.`;
-
+  
   const coverUrl = book.image;
-
+  
   // CORRECTED: Template literals inside hasPart JSON structure
   const hasPart = book.poems.map(poem => {
     const poemSlug = poem.title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
     const poemUrl = `${canonical}/${poemSlug}`;
     const poemText = book.content[0][poem.number] || "";
-
+    
     return {
       "@type": "Chapter",
       "position": poem.number,
@@ -128,13 +132,13 @@ function generateBookPage(book, canonical, collectionKey) {
       "text": poemText.replace(/<[^>]*>/g, "").trim()
     };
   });
-
+  
   // CORRECTED: Template literals
   const poemsHtml = book.poems.map(p => {
     const slug = p.title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
     return `<li><a href="${canonical}/${slug}">${p.number}. ${p.title}</a></li>`;
   }).join("");
-
+  
   // CORRECTED: Template literals throughout the HTML content
   return `<!DOCTYPE html>
 <html lang="en">
@@ -193,7 +197,7 @@ function generateBookPage(book, canonical, collectionKey) {
 
 function generatePoemPage(book, poem, poemText, bookUrl, poemUrl, collectionKey) {
   const cleanText = poemText.replace(/<[^>]*>/g, "").trim();
-
+  
   // CORRECTED: Template literals throughout
   return `<!DOCTYPE html>
 <html lang="en">
@@ -238,4 +242,3 @@ function generatePoemPage(book, poem, poemText, bookUrl, poemUrl, collectionKey)
 </body>
 </html>`;
 }
-
