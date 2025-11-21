@@ -5,152 +5,170 @@
 // - DR_CARL_HILL_JSON
 // - WEST_TO_WEST_JSON
 
-function cleanPath(path) {
-  if (!path || path === '') return '/';
-  // Ensures path always starts with / and cleans up double slashes
-  return '/' + path.replace(/^\/+/, '').replace(/\/+/g, '/');
+/**
+ * Creates a consistent, URL-safe slug from a poem title, handling apostrophes.
+ * E.g., "Karma’s Sequel" -> "karmas-sequel"
+ * @param {string} title
+ * @returns {string}
+ */
+const createSlug = (title) => {
+  return title
+    .toLowerCase()
+    // 1. Normalize Unicode (e.g., diacritics)
+    .normalize("NFD")
+    // 2. Remove smart quotes, straight quotes, and other similar characters
+    .replace(/[\u2018\u2019'‘`]/g, '')
+    // 3. Replace any remaining non-alphanumeric characters or spaces with a single hyphen
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-") // Collapse multiple hyphens
+    .replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
+};
+
+/**
+ * Cleans a title for exact matching purposes (removes punctuation, normalizes spaces).
+ * @param {string} title
+ * @returns {string}
+ */
+const cleanTitleForMatch = (title) => {
+    return title
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u2018\u2019'‘`]/g, '')
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
+
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const ua = request.headers.get("user-agent") || "";
+    // Robust bot check (inherited from previous step)
     const isBot = /Googlebot|Google-InspectionTool|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|facebookexternalhit|Twitterbot|LinkedInBot/i.test(ua);
-    
+
     const match = url.pathname.match(/^\/poetry\/(.+)$/);
-    
-    // Only proceed if it's a bot AND the path matches /poetry/...
     if (!match || !isBot) return fetch(request);
-    
-    // Dynamic mapping of collection names to environment bindings
+
     const COLLECTIONS = {
       "frith-hilton": env.FRITH_HILTON_JSON,
       "dr-carl-hill": env.DR_CARL_HILL_JSON,
       "west-to-west": env.WEST_TO_WEST_JSON
     };
-    
+
     const pathParts = match[1].split("/");
     const bookSlug = pathParts[0].toLowerCase();
-    const poemSlug = pathParts[1] ? pathParts[1].toLowerCase() : null;
-    
+    const poemSlugRaw = pathParts[1] ? pathParts[1].toLowerCase() : null;
+
     let book = null;
     let collectionKey = "";
-    
-    // Iterate through collections to find the matching book
+
+    // 1. Find the book collection
     for (const [key, jsonUrl] of Object.entries(COLLECTIONS)) {
-      if (!jsonUrl) continue; // Skip if the binding is missing
+      if (!jsonUrl) continue;
       try {
         const res = await fetch(jsonUrl);
         if (!res.ok) continue;
         const data = await res.json();
-        
-        // Find book by checking if book slug is included in book title slug
+
         const found = data.find(b => {
-          const bookTitleSlug = b.bookTitle.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-          return bookTitleSlug.includes(bookSlug) || bookSlug.includes(bookTitleSlug);
+          const titleSlug = createSlug(b.bookTitle);
+          // Check if book slug is included in book title slug or vice-versa
+          return titleSlug.includes(bookSlug) || bookSlug.includes(titleSlug);
         });
-        
+
         if (found) {
           book = found;
           collectionKey = key;
           break;
         }
       } catch (e) {
-        console.error(`Error fetching/parsing JSON for ${key}:`, e);
+        console.error(`Error loading ${key}:`, e);
       }
     }
-    
+
     if (!book) return fetch(request);
-    
-    // Generate clean slug for the canonical URL
-    const bookCleanSlug = book.bookTitle
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
+
+    // Generate canonical book slug/URL
+    const bookCleanSlug = createSlug(book.bookTitle);
     const bookUrl = `https://www.frithhilton.com.ng/poetry/${bookCleanSlug}`;
-    
-    if (!poemSlug) {
+
+    if (!poemSlugRaw) {
       // Serve Book Index Page
-      return new Response(generateBookPage(book, bookUrl, collectionKey), {
-        headers: { "Content-Type": "text/html; charset=utf-8" }
-      });
+      return new Response(generateBookPage(book, bookUrl), { headers: { "Content-Type": "text/html; charset=utf-8" } });
     }
+
+    // 2. Find the poem using the incoming slug
+
+    // Convert incoming slug (e.g., 'karmas-sequel') into a clean search string ('karmas sequel')
+    const searchString = poemSlugRaw
+      .replace(/-/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     
-    // Handle Poem Page
-    const poemCleanTitle = poemSlug.replace(/-/g, " ");
-    const poem = book.poems.find(p =>
-      // Look for a case-insensitive match (allowing for minor differences)
-      p.title.toLowerCase().normalize("NFD").replace(/[\u2018\u2019]/g, "").includes(poemCleanTitle)
-    );
-    
+    // Find the poem by matching the cleaned title against the search string
+    const poem = book.poems.find(p => {
+        const canonicalTitleCleaned = cleanTitleForMatch(p.title);
+        return canonicalTitleCleaned === searchString;
+    });
+
     if (!poem) return fetch(request);
-    
-    const poemCleanSlug = poem.title
-      .toLowerCase()
-      .normalize("NFD") // Handles ’ → ' (Unicode normalization)
-      .replace(/[\u2018\u2019]/g, "") // Remove apostrophes completely (’ and ')
-      .replace(/[^a-z0-9\s-]/g, "") // Remove all other special chars
-      .trim()
-      .replace(/\s+/g, "-") // Spaces → single dash
-      .replace(/-+/g, "-") // Multiple dashes → one
-      .replace(/^-|-$/g, ""); // Trim dashes from ends  
-    
-    // CORRECTED: Use correct template literal syntax for poemUrl
+
+    // Generate canonical poem slug
+    const poemCleanSlug = createSlug(poem.title);
+
+    // FIXED: Corrected template literal syntax
     const poemUrl = `${bookUrl}/${poemCleanSlug}`;
     
     const poemText = book.content[0][poem.number] || "<p>Full poem available in the book.</p>";
-    
-    return new Response(generatePoemPage(book, poem, poemText, bookUrl, poemUrl, collectionKey), {
+
+    return new Response(generatePoemPage(book, poem, poemText, bookUrl, poemUrl), {
       headers: { "Content-Type": "text/html; charset=utf-8" }
     });
-  },
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function generateBookPage(book, canonical, collectionKey) {
+function generateBookPage(book, canonical) {
   const samplePoems = book.poems.slice(0, 3).map(p => p.title).join(", ") + (book.poems.length > 3 ? "…" : "");
-  
-  // CORRECTED: Template literals
+
+  // FIXED: Corrected template literal syntax
   const description = `${book.bookTitle} by Frith Hilton, featuring poems like ${samplePoems}, with dedication to ${book.dedicatee}.`;
-  
   const coverUrl = book.image;
-  
-  // CORRECTED: Template literals inside hasPart JSON structure
+
   const hasPart = book.poems.map(poem => {
-    const poemSlug = poem.title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-    const poemUrl = `${canonical}/${poemSlug}`;
-    const poemText = book.content[0][poem.number] || "";
-    
+    const slug = createSlug(poem.title);
+    // FIXED: Corrected template literal syntax
     return {
       "@type": "Chapter",
       "position": poem.number,
       "name": poem.title,
-      "url": poemUrl,
+      "url": `${canonical}/${slug}`,
       "image": coverUrl.replace("/cover.jpg", `/${poem.number}.jpg`),
-      "text": poemText.replace(/<[^>]*>/g, "").trim()
+      "text": (book.content[0][poem.number] || "").replace(/<[^>]*>/g, "").trim()
     };
   });
-  
-  // CORRECTED: Template literals
+
   const poemsHtml = book.poems.map(p => {
-    const slug = p.title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+    const slug = createSlug(p.title);
+    // FIXED: Corrected template literal syntax
     return `<li><a href="${canonical}/${slug}">${p.number}. ${p.title}</a></li>`;
   }).join("");
-  
-  // CORRECTED: Template literals throughout the HTML content
+
+  // FIXED: Corrected template literal syntax in HTML metadata and body
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <meta charset="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/>
   <meta name="author" content="Frith Hilton"/>
   <meta name="description" content="${description}"/>
   <meta name="keywords" content="${book.bookTitle}, Howard Frith Hilton, Frith Hilton, Frith Nightswan Publishers, Forest Crib Books, Poetry dedicated to ${book.dedicatee}"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <meta property="og:url" content="${canonical}"/>
-  <meta property="og:type" content="book"/>
+  <meta property="og:url" content="${canonical}"/><meta property="og:type" content="book"/>
   <meta property="og:title" content="${book.bookTitle} by Frith Hilton"/>
   <meta property="og:description" content="${description}"/>
   <meta property="og:image" content="${coverUrl}"/>
@@ -166,14 +184,8 @@ function generateBookPage(book, canonical, collectionKey) {
     "@context": "https://schema.org",
     "@type": "Book",
     "name": "${book.bookTitle}",
-    "author": {
-      "@type": "Person",
-      "name": "Howard Frith Hilton"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "Forest Crib Books Imprint under Frith Nightswan Publishers"
-    },
+    "author": {"@type":"Person","name":"Howard Frith Hilton"},
+    "publisher": {"@type":"Organization","name":"Forest Crib Books Imprint under Frith Nightswan Publishers"},
     "datePublished": "${book.releaseDate}",
     "inLanguage": "en",
     "genre": "Poetry",
@@ -195,10 +207,10 @@ function generateBookPage(book, canonical, collectionKey) {
 </html>`;
 }
 
-function generatePoemPage(book, poem, poemText, bookUrl, poemUrl, collectionKey) {
+function generatePoemPage(book, poem, poemText, bookUrl, poemUrl) {
   const cleanText = poemText.replace(/<[^>]*>/g, "").trim();
-  
-  // CORRECTED: Template literals throughout
+
+  // FIXED: Corrected template literal syntax throughout
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
