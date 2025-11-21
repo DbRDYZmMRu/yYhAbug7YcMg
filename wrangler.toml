@@ -1,0 +1,8 @@
+name = "frith-poetry-worker"
+main = "src/index.js"
+compatibility_date = "2025-11-20"
+
+[vars]
+FRITH_HILTON_JSON = "https://raw.githubusercontent.com/DbRDYZmMRu/yYhAbug7YcMg/refs/heads/main/json/frith-hilton-collection.json"
+DR_CARL_HILL_JSON = "https://raw.githubusercontent.com/DbRDYZmMRu/yYhAbug7YcMg/refs/heads/main/json/dr-carl-hill-collection.json"
+WEST_TO_WEST_JSON = "https://raw.githubusercontent.com/DbRDYZmMRu/yYhAbug7YcMg/refs/heads/main/json/west-to-west-collection.json"
