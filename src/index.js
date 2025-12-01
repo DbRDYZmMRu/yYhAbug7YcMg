@@ -93,7 +93,7 @@ export default {
     
     // Generate canonical book slug/URL
     const bookCleanSlug = createSlug(book.bookTitle);
-    const bookUrl = `https://www.frithhilton.com.ng/poetry/${bookCleanSlug}`;
+    const bookUrl = `https://www.frithhilton.com.ng/published/poetry/${bookCleanSlug}`;
     
     if (!poemSlugRaw) {
       // Serve Book Index Page
