@@ -1,4 +1,4 @@
-name = "frith-poetry-worker"
+name = "poetry0ssr"
 main = "src/index.js"
 compatibility_date = "2025-11-20"
 
