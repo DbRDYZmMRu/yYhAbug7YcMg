@@ -162,7 +162,7 @@ function generateBookPage(book, canonical) {
     <meta charset="utf-8"/><meta http-equiv="X-UA-Compatible" content="IE=edge"/>
     <meta name="author" content="Frith Hilton"/>
     <meta name="description" content="${description}"/>
-    <meta name="keywords" content="${book.bookTitle}, Howard Frith Hilton, Frith Hilton, Frith Nightswan Publishers, Forest Crib Books, Poetry dedicated to ${book.dedicatee}"/>
+    <meta name="keywords" content="${book.bookTitle}, Howard Frith Hilton, Frith Hilton, Frith HiltonPublishers, Forest Crib Books, Poetry dedicated to ${book.dedicatee}"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta property="og:url" content="${canonical}"/><meta property="og:type" content="book"/>
     <meta property="og:title" content="${book.bookTitle} by Frith Hilton"/>
@@ -181,7 +181,7 @@ function generateBookPage(book, canonical) {
         "@type": "Book",
         "name": "${book.bookTitle}",
         "author": {"@type":"Person","name":"Howard Frith Hilton"},
-        "publisher": {"@type":"Organization","name":"Forest Crib Books Imprint under Frith Nightswan Publishers"},
+        "publisher": {"@type":"Organization","name":"Forest Crib Books Imprint under Frith HiltonPublishers"},
         "datePublished": "${book.releaseDate}",
         "inLanguage": "en",
         "genre": "Poetry",
@@ -198,7 +198,7 @@ function generateBookPage(book, canonical) {
     <p><strong>Released:</strong> ${book.releaseDate} — ${book.poemCount} poems</p>
     <h2>Table of Contents</h2>
     <ol>${poemsHtml}</ol>
-    <footer>© Frith Hilton — Forest Crib Books under Frith Nightswan Publishers</footer>
+    <footer>© Frith Hilton — Forest Crib Books under Frith HiltonPublishers</footer>
 </body>
 </html>`;
 }
@@ -289,7 +289,7 @@ function generatePoemPage(book, poem, poemText, bookUrl, poemUrl, collectionKey,
     <h2>Full Text:</h2>
     <!-- Raw poem text is now fully visible and indexable -->
     <div class="poem">${poemText}</div>
-    <footer>© Frith Hilton — Forest Crib Books under Frith Nightswan Publishers</footer>
+    <footer>© Frith Hilton — Forest Crib Books under Frith HiltonPublishers</footer>
 </body>
 </html>`;
 }
